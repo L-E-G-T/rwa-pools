@@ -82,7 +82,7 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
             poolConfig.swapFeePercentage,
             poolConfig.protocolFeeExempt,
             poolConfig.roleAccounts,
-            nftCheckHook, // poolHooksContract
+            nftCheckHook, 
             poolConfig.liquidityManagement
         );
         console.log("SumPoolWithNftCheckHook deployed at: %s", pool);
