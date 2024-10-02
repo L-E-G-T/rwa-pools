@@ -3,10 +3,10 @@
 pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { IRouter } from "@balancer-labs/v3-interfaces/contracts/vault/IRouter.sol";
 import { IRouter } from "../lib/balancer-v3-monorepo/pkg/interfaces/contracts/vault/IRouter.sol";
 
 import { IVault } from "../lib/balancer-v3-monorepo/pkg/interfaces/contracts/vault/IVault.sol";
@@ -73,6 +73,8 @@ contract StakedGovernanceHookTest is BaseVaultTest {
 uint256 public aliceBptBalance;
 
 function testAddLiquidity() public {
+            console.log("alice");
+
     uint256 addAmount = poolInitAmount / 100;
     uint256[] memory maxAmountsIn = new uint256[](2);
     maxAmountsIn[daiIdx] = addAmount;
@@ -97,6 +99,11 @@ function testAddLiquidity() public {
         abi.encode(alice) // userData (changed from "" to alice)
     );
     aliceBptBalance = IERC20(address(pool)).balanceOf(alice);
+
+    console.log("alice");
+     console.log("Alice BPT balance:", aliceBptBalance);
+    console.log("Alice governance token balance:", governanceToken.balanceOf(alice));
+    console.log("Governance token percentage:", hook.governanceTokenPercentage());
     assertGt(aliceBptBalance, 0, "No BPT tokens received");
 
     vm.stopPrank();
@@ -124,66 +131,40 @@ function testAddLiquidity() public {
     uint256[] memory amountsOut = router.removeLiquidityProportional(
         address(pool),
         exactBptAmountIn,
-        new uint256[](2), // minAmountsOut, set to 0 for simplicity
-        false, // wethIsEth
-        abi.encode(alice) // userData (changed from "" to alice)
+        new uint256[](2),
+        false, 
+        abi.encode(alice) 
     );
     vm.stopPrank();
 
     uint256 expectedBurnedTokens = exactBptAmountIn.mulDown(hook.governanceTokenPercentage());
     assertEq(governanceToken.balanceOf(alice), governanceTokensBefore - expectedBurnedTokens, "Incorrect governance tokens burned");
 }
-    // function testStakeAndUnstake() public {
-    //     // First, add liquidity to get governance tokens
-    //     testAddLiquidity();
+    function testStakeAndUnstake() public {
+    // First, add liquidity to get governance tokens
+    testAddLiquidity();
 
-    //     uint256 stakeAmount = governanceToken.balanceOf(alice) / 2;
-    //     vm.prank(alice);
-    //     hook.stake(stakeAmount, 20e16, 60e16);
+    uint256 stakeAmount = governanceToken.balanceOf(alice);
+    console.log("Stake amount:", stakeAmount);
+    console.log("Governance token percentage:", hook.governanceTokenPercentage());
+    
+    require(stakeAmount > 0, "Insufficient governance tokens for test");
 
-    //     assertEq(hook.stakes(alice).amount, stakeAmount, "Incorrect stake amount");
-    //     assertEq(hook.stakes(alice).votedGovernancePercentage, 20e16, "Incorrect voted governance percentage");
-    //     assertEq(hook.stakes(alice).votedMajorityThreshold, 60e16, "Incorrect voted majority threshold");
+    vm.startPrank(alice);
+    governanceToken.approve(address(hook), stakeAmount);
+    hook.stake(stakeAmount, 20e16, 60e16);
+    vm.stopPrank();
 
-    //     vm.prank(alice);
-    //     hook.unstake();
+    (uint256 amount, uint64 votedGovernancePercentage, uint64 votedMajorityThreshold) = hook.stakes(alice);
+    assertEq(amount, stakeAmount, "Incorrect stake amount");
+    assertEq(votedGovernancePercentage, 20e16, "Incorrect voted governance percentage");
+    assertEq(votedMajorityThreshold, 60e16, "Incorrect voted majority threshold");
 
-    //     assertEq(hook.stakes(alice).amount, 0, "Stake not removed");
-    //     assertEq(governanceToken.balanceOf(alice), stakeAmount, "Governance tokens not returned");
-    // }
+    vm.prank(alice);
+    hook.unstake();
 
-    // function testExecuteGovernanceUpdate() public {
-    //     // Add liquidity and stake for multiple users
-    //     testAddLiquidity();
-    //     vm.prank(alice);
-    //     hook.stake(governanceToken.balanceOf(alice), 20e16, 60e16);
-
-    //     vm.prank(bob);
-    //     (bool success, ) = address(router).call(
-    //         abi.encodeWithSelector(
-    //             IRouter.addLiquidity.selector,
-    //             address(pool),
-    //             [poolInitAmount / 100, poolInitAmount / 100],
-    //             0,
-    //             bob,
-    //             false,
-    //             bytes("")
-    //         )
-    //     );
-    //     assertTrue(success, "Add liquidity for Bob failed");
-
-    //     vm.prank(bob);
-    //     hook.stake(governanceToken.balanceOf(bob), 15e16, 55e16);
-
-    //     // Execute governance update
-    //     hook.executeGovernanceUpdate();
-
-    //     // Check if governance parameters were updated
-    //     assertEq(hook.governanceTokenPercentage(), 20e16, "Governance token percentage not updated");
-    //     assertEq(hook.majorityThreshold(), 60e16, "Majority threshold not updated");
-
-    //     // Check if stakes were returned
-    //     assertEq(hook.stakes(alice).amount, 0, "Alice's stake not returned");
-    //     assertEq(hook.stakes(bob).amount, 0, "Bob's stake not returned");
-    // }
+    (amount, , ) = hook.stakes(alice);
+    assertEq(amount, 0, "Stake not removed");
+    assertEq(governanceToken.balanceOf(alice), stakeAmount, "Governance tokens not returned");
+}
 }
