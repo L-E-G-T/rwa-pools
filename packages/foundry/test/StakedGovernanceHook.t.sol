@@ -70,6 +70,7 @@ contract StakedGovernanceHookTest is BaseVaultTest {
 
         return address(newPool);
     }
+uint256 public aliceBptBalance;
 
 function testAddLiquidity() public {
     uint256 addAmount = poolInitAmount / 100;
@@ -88,52 +89,50 @@ function testAddLiquidity() public {
     usdc.approve(address(router), addAmount);
 
     // Add liquidity proportionally
-    uint256[] memory amountsIn = router.addLiquidityProportional(
+   uint256[] memory amountsIn = router.addLiquidityProportional(
         address(pool),
         maxAmountsIn,
         1, // exactBptAmountOut (minimum amount to receive)
         false, // wethIsEth
-        "" // userData
+        abi.encode(alice) // userData (changed from "" to alice)
     );
+    aliceBptBalance = IERC20(address(pool)).balanceOf(alice);
+    assertGt(aliceBptBalance, 0, "No BPT tokens received");
 
     vm.stopPrank();
 
     assertGt(amountsIn[daiIdx], 0, "No DAI added");
     assertGt(amountsIn[usdcIdx], 0, "No USDC added");
 
-    uint256 expectedGovernanceTokens = amountsIn[daiIdx].mulDown(hook.governanceTokenPercentage());
+    uint256 expectedGovernanceTokens = aliceBptBalance.mulDown(hook.governanceTokenPercentage());
     assertEq(governanceToken.balanceOf(alice), expectedGovernanceTokens, "Incorrect governance tokens minted");
 }
-    // function testRemoveLiquidity() public {
-    //     // First, add liquidity
-    //     testAddLiquidity();
+    function testRemoveLiquidity() public {
+    // First, add liquidity
+    testAddLiquidity();
 
-    //     uint256 removeAmount = poolInitAmount / 200; // Remove half of what was added
-    //     uint256[] memory amountsOut = new uint256[](2);
-    //     amountsOut[daiIdx] = removeAmount;
-    //     amountsOut[usdcIdx] = removeAmount;
+    uint256 removeAmount = aliceBptBalance / 2; // Remove half of Alice's BPT balance
+    uint256 exactBptAmountIn = removeAmount;
 
-    //     uint256 governanceTokensBefore = governanceToken.balanceOf(alice);
+    uint256 governanceTokensBefore = governanceToken.balanceOf(alice);
 
-    //     vm.prank(alice);
-    //     (bool success, ) = address(router).call(
-    //         abi.encodeWithSelector(
-    //             IRouter.removeLiquidity.selector,
-    //             address(pool),
-    //             amountsOut,
-    //             type(uint256).max,
-    //             alice,
-    //             false,
-    //             bytes("")
-    //         )
-    //     );
+    vm.startPrank(alice);
+    
+    // Approve the router to spend Alice's BPT tokens
+    IERC20(address(pool)).approve(address(router), exactBptAmountIn);
 
-    //     assertTrue(success, "Remove liquidity failed");
+    uint256[] memory amountsOut = router.removeLiquidityProportional(
+        address(pool),
+        exactBptAmountIn,
+        new uint256[](2), // minAmountsOut, set to 0 for simplicity
+        false, // wethIsEth
+        abi.encode(alice) // userData (changed from "" to alice)
+    );
+    vm.stopPrank();
 
-    //     uint256 expectedBurnedTokens = removeAmount.mulDown(hook.governanceTokenPercentage());
-    //     assertEq(governanceToken.balanceOf(alice), governanceTokensBefore - expectedBurnedTokens, "Incorrect governance tokens burned");
-    // }
-
+    uint256 expectedBurnedTokens = exactBptAmountIn.mulDown(hook.governanceTokenPercentage());
+    assertEq(governanceToken.balanceOf(alice), governanceTokensBefore - expectedBurnedTokens, "Incorrect governance tokens burned");
+}
     // function testStakeAndUnstake() public {
     //     // First, add liquidity to get governance tokens
     //     testAddLiquidity();

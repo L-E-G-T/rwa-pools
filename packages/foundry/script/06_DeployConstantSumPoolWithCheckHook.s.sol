@@ -26,7 +26,7 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
     function deployConstantSumPoolWithCheckHook(address token1, address token2) internal {
 
         // change this manually, because msg.sender does not work when broadcasting :(
-        address publicKey = 0xe7a5b06E8dc5863566B974a4a19509898bdEc277;
+        address publicKey = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
         // Start creating the transactions
         uint256 deployerPrivateKey = getDeployerPrivateKey();
