@@ -33,7 +33,8 @@ contract DeployStakedGovernancePool is PoolHelpers, ScaffoldHelpers {
         StakedGovernanceHook stakedGovernanceHook = new StakedGovernanceHook(
             vault,
             IGovernanceToken(governanceToken),
-            IERC20(stableToken)
+            IERC20(stableToken),
+            1e16
         );
         console.log("StakedGovernanceHook deployed at: %s", address(stakedGovernanceHook));
 

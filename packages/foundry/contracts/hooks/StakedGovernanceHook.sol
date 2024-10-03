@@ -67,7 +67,7 @@ contract StakedGovernanceHook is BaseHooks, VaultGuard, Ownable {
         uint256,
         uint256,
         bytes memory
-    ) public override onlyVault returns (bool) {
+    ) public  onlyVault returns (bool) {
         uint256 stableTokenIndex = getStableTokenIndex();
         uint256 stableTokenAmount = amountsIn[stableTokenIndex];
         uint256 governanceTokenAmount = stableTokenAmount.mulDown(incentiveFee);
@@ -84,7 +84,7 @@ contract StakedGovernanceHook is BaseHooks, VaultGuard, Ownable {
         uint256[] memory amountsOut,
         uint256,
         bytes memory
-    ) public override onlyVault returns (bool, uint256[] memory hookAdjustedAmountsOutRaw) {
+    ) public  onlyVault returns (bool, uint256[] memory hookAdjustedAmountsOutRaw) {
         uint256 stableTokenIndex = getStableTokenIndex();
         uint256 stableTokenAmount = amountsOut[stableTokenIndex];
         uint256 governanceTokenAmount = stableTokenAmount.mulDown(incentiveFee);
