@@ -15,7 +15,7 @@ import { PoolHelpers, CustomPoolConfig, InitializationConfig } from "./PoolHelpe
 import { ScaffoldHelpers, console } from "./ScaffoldHelpers.sol";
 import { ConstantSumFactory } from "../contracts/factories/ConstantSumFactory.sol";
 import { StakedGovernanceHook, IGovernanceToken } from "../contracts/hooks/StakedGovernanceHook.sol";
-import { ERC20Ownable } from "../contracts/mocks/MockERC20Ownable.sol";
+import { MockGovernanceToken } from "../contracts/mocks/MockGovernanceToken.sol";
 import { MockERC20Factory } from "../contracts/mocks/MockERC20Factory.sol";
 
 contract DeployConstantSumPoolWithStakedGovernanceHook is PoolHelpers, ScaffoldHelpers {
@@ -35,31 +35,35 @@ contract DeployConstantSumPoolWithStakedGovernanceHook is PoolHelpers, ScaffoldH
         MockERC20Factory mockERC20Factory = new MockERC20Factory("ERC20Factory");
         console.log("MockERC20Factory deployed at: %s", address(mockERC20Factory));
 
-        // Deploy a mock ERC20 token to use as the governance token
+        // Create governance token using MockERC20Factory
         address[] memory membersToFund = new address[](1);
         membersToFund[0] = publicKey;
         uint256[] memory amountsToFund = new uint256[](1);
         amountsToFund[0] = 1000e18;
 
-        ERC20Ownable governanceToken = new ERC20Ownable(
+        address governanceTokenAddress = mockERC20Factory.createToken(
             "Governance Token",
             "GOV",
             publicKey,
-            address(mockERC20Factory),
-            address(0), // No linked NFT for this token
-            0, // No linked NFT ID
+            address(0),
+            0,
             membersToFund,
             amountsToFund
         );
-        console.log("Governance Token deployed at: %s", address(governanceToken));
+        console.log("Governance Token deployed at: %s", governanceTokenAddress);
 
         // Set the pool's deployment, registration, and initialization config
-        CustomPoolConfig memory poolConfig = getStakedGovernancePoolConfig(token1, token2);
-        InitializationConfig memory initConfig = getStakedGovernancePoolInitConfig(token1, token2);
+        CustomPoolConfig memory poolConfig = getStakedGovernancePoolConfig(governanceTokenAddress, token2);
+        InitializationConfig memory initConfig = getStakedGovernancePoolInitConfig(governanceTokenAddress, token2);
 
         // Deploy the StakedGovernanceHook
-        StakedGovernanceHook stakedGovernanceHook = new StakedGovernanceHook(vault,IGovernanceToken(address(governanceToken)),IERC20(token2),1e16);
+        address stakedGovernanceHook = address(
+            new StakedGovernanceHook(vault, IGovernanceToken(governanceTokenAddress), IERC20(token2), 1e16)
+        );
+
         console.log("StakedGovernanceHook deployed at address: %s", address(stakedGovernanceHook));
+
+        // MockGovernanceToken._approve(owner, spender, value);
 
         // Deploy a pool and register it with the vault
         address pool = factory.create(
@@ -70,7 +74,7 @@ contract DeployConstantSumPoolWithStakedGovernanceHook is PoolHelpers, ScaffoldH
             poolConfig.swapFeePercentage,
             poolConfig.protocolFeeExempt,
             poolConfig.roleAccounts,
-            address(stakedGovernanceHook),
+            stakedGovernanceHook,
             poolConfig.liquidityManagement
         );
         console.log("SumPoolWithStakedGovernanceHook deployed at: %s", pool);
@@ -90,13 +94,16 @@ contract DeployConstantSumPoolWithStakedGovernanceHook is PoolHelpers, ScaffoldH
         console.log("SumPoolWithStakedGovernanceHook initialized successfully!");
 
         // Grant minter role to the StakedGovernanceHook
-        governanceToken.transferOwnership(address(stakedGovernanceHook));
+        MockGovernanceToken(governanceTokenAddress).transferOwnership(address(stakedGovernanceHook));
         console.log("Ownership of Governance Token transferred to StakedGovernanceHook");
 
         vm.stopBroadcast();
     }
 
-    function getStakedGovernancePoolConfig(address token1, address token2) internal view returns (CustomPoolConfig memory config) {
+    function getStakedGovernancePoolConfig(
+        address token1,
+        address token2
+    ) internal view returns (CustomPoolConfig memory config) {
         string memory name = "Constant Sum Pool With Staked Governance";
         string memory symbol = "CSP-SG";
         bytes32 salt = keccak256(abi.encode(block.number));
@@ -142,7 +149,10 @@ contract DeployConstantSumPoolWithStakedGovernanceHook is PoolHelpers, ScaffoldH
         });
     }
 
-    function getStakedGovernancePoolInitConfig(address token1, address token2) internal pure returns (InitializationConfig memory config) {
+    function getStakedGovernancePoolInitConfig(
+        address token1,
+        address token2
+    ) internal pure returns (InitializationConfig memory config) {
         IERC20[] memory tokens = new IERC20[](2);
         tokens[0] = IERC20(token1);
         tokens[1] = IERC20(token2);

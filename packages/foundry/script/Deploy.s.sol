@@ -8,7 +8,9 @@ import { DeployConstantSumPool } from "./01_DeployConstantSumPool.s.sol";
 import { DeployConstantProductPool } from "./02_DeployConstantProductPool.s.sol";
 import { DeployWeightedPool8020 } from "./03_DeployWeightedPool8020.s.sol";
 import { DeployConstantSumPoolWithCheckHook } from "./06_DeployConstantSumPoolWithCheckHook.s.sol";
-import { DeployConstantSumPoolWithStakedGovernanceHook } from "./07_DeployConstantSumPoolWithStakedGovernanceHook.s.sol";
+import {
+    DeployConstantSumPoolWithStakedGovernanceHook
+} from "./07_DeployConstantSumPoolWithStakedGovernanceHook.s.sol";
 
 /**
  * @title Deploy Script
@@ -23,23 +25,22 @@ contract DeployScript is
     DeployWeightedPool8020,
     DeployConstantSumPoolWithCheckHook,
     DeployConstantSumPoolWithStakedGovernanceHook
-
 {
     function run() external scaffoldExport {
         // Deploy mock tokens to use for the pools and hooks
         (address mockToken1, address mockToken2, address mockVeBAL) = deployMockTokens();
 
         // Deploy, register, and initialize a constant sum pool with a swap fee discount hook
-        deployConstantSumPool(mockToken1, mockToken2, mockVeBAL);
+        // deployConstantSumPool(mockToken1, mockToken2, mockVeBAL);
 
-        deployConstantSumPoolWithCheckHook(mockToken1, mockToken2);
+        // deployConstantSumPoolWithCheckHook(mockToken1, mockToken2);
         deployConstantSumPoolWithStakedGovernanceHook(mockToken1, mockToken2);
 
         // Deploy, register, and initialize a constant product pool with a lottery hook
-        deployConstantProductPool(mockToken1, mockToken2);
+        // deployConstantProductPool(mockToken1, mockToken2);
 
         // Deploy, register, and initialize a weighted pool with an exit fee hook
-        deployWeightedPool8020(mockToken1, mockToken2);
+        // deployWeightedPool8020(mockToken1, mockToken2);
     }
 
     modifier scaffoldExport() {
