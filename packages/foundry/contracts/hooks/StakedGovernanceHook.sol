@@ -10,6 +10,8 @@ import {
     AddLiquidityKind,
     AddLiquidityParams,
     RemoveLiquidityKind,
+    LiquidityManagement,
+    TokenConfig,
     HookFlags
 } from "@balancer-labs/v3-interfaces/contracts/vault/VaultTypes.sol";
 import { FixedPoint } from "@balancer-labs/v3-solidity-utils/contracts/math/FixedPoint.sol";
@@ -40,6 +42,7 @@ contract StakedGovernanceHook is BaseHooks, VaultGuard, Ownable {
     uint256 public newIncentiveFeeProposal;
     uint256 public votesForNewFee;
 
+    event GovernanceHookRegistered(address indexed hooksContract, address indexed pool);
     event GovernanceTokensMinted(address indexed user, uint256 amount);
     event GovernanceTokensBurned(address indexed user, uint256 amount);
     event Staked(address indexed user, uint256 amount, uint256 votedIncentiveFee);
@@ -57,6 +60,20 @@ contract StakedGovernanceHook is BaseHooks, VaultGuard, Ownable {
         governanceToken = _governanceToken;
         stableToken = _stableToken;
         incentiveFee = _initialIncentiveFee;
+    }
+
+    function onRegister(
+        address,
+        address pool,
+        TokenConfig[] memory,
+        LiquidityManagement calldata
+    ) public override onlyVault returns (bool) {
+        // NOTICE: In real hooks, make sure this function is properly implemented (e.g. check the factory, and check
+        // that the given pool is from the factory). Returning true unconditionally allows any pool, with any
+        // configuration, to use this hook.
+        emit GovernanceHookRegistered(address(this), pool);
+
+        return true;
     }
 
     function onAfterAddLiquidity(
