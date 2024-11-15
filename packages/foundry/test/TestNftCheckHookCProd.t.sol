@@ -145,7 +145,7 @@ contract TestNftCheckHookCProd is BaseVaultTest {
     }
 
     function testSwapFeeTen() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 10e16; // 10%
+        uint256 swapFeePercentage = 10e16; // 10% (max)
         vm.prank(hookOwner);
         vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
        _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
