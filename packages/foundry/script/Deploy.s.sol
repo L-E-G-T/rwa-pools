@@ -39,13 +39,12 @@ contract DeployScript is
         deployWeightedPool8020(mockToken1, mockToken2);
         */
 
-        // Deploy, register, and initialize a constant sum pool with a swap fee discount hook
-        deployConstantSumPoolWithCheckHook(mockStable);
-        // Deploy, register, and initialize a constant product pool with a lottery hook
-        deployConstantProductPoolWithCheckHook(mockToken1, mockToken2);
-        // Deploy, register, and initialize a weighted pool with an exit fee hook
-        deployWeightedPool8020WithCheckHook(mockToken1, mockToken2);
-        
+        // Deploy, register, and initialize a constant sum pool with a CheckNftHook
+        // deployConstantSumPoolWithCheckHook(mockStable);
+        // Deploy, register, and initialize a constant product pool with a CheckNftHook
+        deployConstantProductPoolWithCheckHook(mockStable);
+        // Deploy, register, and initialize a weighted pool with an exit CheckNftHook
+        // deployWeightedPool8020WithCheckHook(mockToken1, mockToken2);
     }
 
     modifier scaffoldExport() {
