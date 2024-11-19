@@ -7,7 +7,9 @@ import { DeployMockTokens } from "./00_DeployMockTokens.s.sol";
 import { DeployConstantSumPool } from "./01_DeployConstantSumPool.s.sol";
 import { DeployConstantProductPool } from "./02_DeployConstantProductPool.s.sol";
 import { DeployWeightedPool8020 } from "./03_DeployWeightedPool8020.s.sol";
-import { DeployConstantSumPoolWithCheckHook } from "./06_DeployConstantSumPoolWithCheckHook.s.sol";
+import { DeployConstantSumPoolWithCheckHook } from "./04_DeployConstantSumPoolWithCheckHook.s.sol";
+import { DeployConstantProductPoolWithCheckHook } from "./05_DeployConstantProductPoolWithCheckHook.s.sol";
+import { DeployWeightedPool8020WithCheckHook } from "./06_DeployWeightedPool8020WithCheckHook.s.sol";
 
 /**
  * @title Deploy Script
@@ -17,25 +19,33 @@ import { DeployConstantSumPoolWithCheckHook } from "./06_DeployConstantSumPoolWi
 contract DeployScript is
     ScaffoldHelpers,
     DeployMockTokens,
-    DeployConstantSumPool,
-    DeployConstantProductPool,
-    DeployWeightedPool8020,
-    DeployConstantSumPoolWithCheckHook
+    // DeployConstantSumPool,
+    // DeployConstantProductPool,
+    // DeployWeightedPool8020,
+    DeployConstantSumPoolWithCheckHook,
+    DeployConstantProductPoolWithCheckHook,
+    DeployWeightedPool8020WithCheckHook
 {
     function run() external scaffoldExport {
         // Deploy mock tokens to use for the pools and hooks
         (address mockToken1, address mockToken2, address mockVeBAL, address mockStable) = deployMockTokens();
 
+        /*
         // Deploy, register, and initialize a constant sum pool with a swap fee discount hook
-        // deployConstantSumPool(mockToken1, mockToken2, mockVeBAL);
-
-        deployConstantSumPoolWithCheckHook(mockStable);
-
+        deployConstantSumPool(mockToken1, mockToken2, mockVeBAL);
         // Deploy, register, and initialize a constant product pool with a lottery hook
         deployConstantProductPool(mockToken1, mockToken2);
-
         // Deploy, register, and initialize a weighted pool with an exit fee hook
         deployWeightedPool8020(mockToken1, mockToken2);
+        */
+
+        // Deploy, register, and initialize a constant sum pool with a swap fee discount hook
+        deployConstantSumPoolWithCheckHook(mockStable);
+        // Deploy, register, and initialize a constant product pool with a lottery hook
+        deployConstantProductPoolWithCheckHook(mockToken1, mockToken2);
+        // Deploy, register, and initialize a weighted pool with an exit fee hook
+        deployWeightedPool8020WithCheckHook(mockToken1, mockToken2);
+        
     }
 
     modifier scaffoldExport() {
