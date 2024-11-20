@@ -15,6 +15,7 @@ import { PoolHelpers, CustomPoolConfig, InitializationConfig } from "./PoolHelpe
 import { ScaffoldHelpers, console } from "./ScaffoldHelpers.sol";
 import { ConstantSumFactory } from "../contracts/factories/ConstantSumFactory.sol";
 import { ConstantProductFactory } from "../contracts/factories/ConstantProductFactory.sol";
+import { WeightedPoolFactory } from "@balancer-labs/v3-pool-weighted/contracts/WeightedPoolFactory.sol";
 import { NftCheckHook } from "../contracts/hooks/NftCheckHook.sol";
 import { MockNft } from "../contracts/mocks/MockNft.sol";
 import { Router } from "../contracts/mocks/Router.sol";
@@ -28,6 +29,10 @@ enum FactoryType {
 }
 
 contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
+    bool private constant ENABLE_DONATION = true;
+    bool private constant DISABLE_UNBALANCED_LIQUIDITY = false;
+    uint256 private constant SWAP_FEE_PERCENTAGE = 0.01e18;
+
     function deployNftHookHelper(address token, FactoryType factoryType) public {
         // Start creating the transactions
         // address deployerAddress = address(uint160(getDeployerAddress())); TODO
@@ -53,6 +58,7 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
         // Set the pool's deployment, registration, and initialization config
         address linkedTokenAddress = NftCheckHook(nftCheckHook).getLinkedToken();
         console.log("linkedTokenAddress: %s", linkedTokenAddress);
+        // TODO make sure the tokens are sorted correctly and match with pool weights
         CustomPoolConfig memory poolConfig = getCheckSumPoolConfig(linkedTokenAddress, token);
         InitializationConfig memory initConfig = getCheckSumPoolInitConfig(linkedTokenAddress, token);
 
@@ -93,6 +99,26 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
                 poolConfig.liquidityManagement
             );
             console.log("ConstantProductPoolWithNftCheckHook deployed at: %s", pool);
+        } else if (factoryType == FactoryType.Weighted) {
+            // Deploy a  factory
+            WeightedPoolFactory factory = new WeightedPoolFactory(vault, 365 days, "Factory v1", "Pool v1");
+            console.log("Weighted Pool Factory deployed at: %s", address(factory));
+
+            // Deploy a pool and register it with the vault
+            /// @notice passing args directly to avoid stack too deep error
+             pool = factory.create(
+                "80/20 Weighted Pool", // string name
+                "80-20-WP", // string symbol
+                poolConfig.tokenConfigs, // getTokenConfigs(token1, token2), // TokenConfig[] tokenConfigs
+                getNormailzedWeights(), // uint256[] normalizedWeights
+                poolConfig.roleAccounts, // PoolRoleAccounts roleAccounts
+                SWAP_FEE_PERCENTAGE, // uint256 swapFeePercentage (1%)
+                nftCheckHook, // address poolHooksContract
+                ENABLE_DONATION,
+                DISABLE_UNBALANCED_LIQUIDITY,
+                keccak256(abi.encode(block.number)) // bytes32 salt
+            );
+            console.log("Weighted Pool deployed at: %s", pool);
         }
 
         // Approve the router to spend tokens for pool initialization
@@ -121,7 +147,7 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
         string memory name = "NFT Constant Sum Pool"; // name for the pool
         string memory symbol = "NFTCSP"; // symbol for the BPT
         bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
-        uint256 swapFeePercentage = 0.01e18; // 1%
+        uint256 swapFeePercentage = SWAP_FEE_PERCENTAGE; // 1%
         bool protocolFeeExempt = true;
         address poolHooksContract = address(0); // zero address if no hooks contract is needed
 
@@ -145,10 +171,10 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
             poolCreator: address(0) // Account empowered to set the pool creator fee percentage
         });
         LiquidityManagement memory liquidityManagement = LiquidityManagement({
-            disableUnbalancedLiquidity: false,
+            disableUnbalancedLiquidity: DISABLE_UNBALANCED_LIQUIDITY,
             enableAddLiquidityCustom: false,
             enableRemoveLiquidityCustom: false,
-            enableDonation: true
+            enableDonation: ENABLE_DONATION
         });
 
         config = CustomPoolConfig({
@@ -189,6 +215,13 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
             wethIsEth: wethIsEth,
             userData: userData
         });
+    }
+
+    /// @dev Set the weights for each token in the pool
+    function getNormailzedWeights() internal pure returns (uint256[] memory normalizedWeights) {
+        normalizedWeights = new uint256[](2);
+        normalizedWeights[0] = uint256(80e16);
+        normalizedWeights[1] = uint256(20e16);
     }
 }
 
