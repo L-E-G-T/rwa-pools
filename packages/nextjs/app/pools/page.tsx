@@ -105,7 +105,7 @@ const PoolDashboard = ({ pool, refetchPool }: { pool: Pool; refetchPool: Refetch
       poolAddress || "",
       linkedToken > stableToken ? [stableToken, linkedToken] : [linkedToken, stableToken],
       [BigInt(50e18), BigInt(50e18)],
-      BigInt(99e18),
+      BigInt(49e18), // for CS pool: 99e18, for others: 49e18
       false,
       "0x",
     ],
