@@ -132,8 +132,8 @@ contract TestNftCheckHookCProd is BaseVaultTest {
         assertEq(randomUserUsdcBalance, RANDOM_USER_USDC_INITIAL_BALANCE, "RandomUser wrong usdc tokens balance");
     }
 
-    function testSwapFeeZero() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+    function testSwapFeeOne() public transferNFT_approveBPT_initializePool {
+        uint256 swapFeePercentage = 0.01e18; // 1%
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
     }
 
@@ -152,7 +152,7 @@ contract TestNftCheckHookCProd is BaseVaultTest {
     }
 
     function testOwnerCanRemoveLiquidityAfterSettlement() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0;
+        uint256 swapFeePercentage = 0.01e18;
         console.log("BPT amount of hook: ", IERC20(pool).balanceOf(nftCheckHook));
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
 
@@ -163,7 +163,7 @@ contract TestNftCheckHookCProd is BaseVaultTest {
     }
 
     function testRugPulling() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+        uint256 swapFeePercentage = 0.01e18; // 0%
 
         // random user swaps usdc for linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
@@ -177,7 +177,7 @@ contract TestNftCheckHookCProd is BaseVaultTest {
 
     // amount of linked tokens in the pool = 2 * amount of usdc in the pool 
     function testRedeemRationWhenStablePoolRatioIsBig() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+        uint256 swapFeePercentage = 0.01e18; // 0%
 
         // random user swaps 40e18 usdc for 40e18 linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
@@ -286,7 +286,7 @@ contract TestNftCheckHookCProd is BaseVaultTest {
         string memory name = "Constant Product Pool"; // name for the pool
         string memory symbol = "CPP"; // symbol for the BPT
         bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
-        uint256 swapFeePercentage = 0.02e18; // 2%
+        uint256 swapFeePercentage = 0.01e18; // 2%
         bool protocolFeeExempt = false;
         address poolHooksContract = address(0); // zero address if no hooks contract is needed
 

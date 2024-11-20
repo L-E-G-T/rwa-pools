@@ -8,6 +8,7 @@ import { IVault } from "@balancer-labs/v3-interfaces/contracts/vault/IVault.sol"
 import { IVaultAdmin } from "@balancer-labs/v3-interfaces/contracts/vault/IVaultAdmin.sol";
 import { IVaultErrors } from "@balancer-labs/v3-interfaces/contracts/vault/IVaultErrors.sol";
 import {
+    TokenType,
     HooksConfig,
     LiquidityManagement,
     PoolRoleAccounts,
@@ -30,6 +31,8 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20TestToken } from "@balancer-labs/v3-solidity-utils/contracts/test/ERC20TestToken.sol";
 import { InitializationConfig } from "../script/PoolHelpers.sol";
 import { InputHelpers } from "@balancer-labs/v3-solidity-utils/contracts/helpers/InputHelpers.sol";
+import { IRateProvider } from "@balancer-labs/v3-interfaces/contracts/solidity-utils/helpers/IRateProvider.sol";
+import { ConstantSumFactory } from "../contracts/factories/ConstantSumFactory.sol";
 
 
 contract TestNftCheckHookCSum is BaseVaultTest {
@@ -128,27 +131,30 @@ contract TestNftCheckHookCSum is BaseVaultTest {
         assertEq(randomUserUsdcBalance, RANDOM_USER_USDC_INITIAL_BALANCE, "RandomUser wrong usdc tokens balance");
     }
 
-    function testSwapFeeZero() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+    function testSwapFeeOne() public transferNFT_approveBPT_initializePool {
+        uint256 swapFeePercentage = 0.01e18; // 1%
+        vm.prank(hookOwner);
+        vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
+        _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
+    }
+
+    function testSwapFeeFive() public transferNFT_approveBPT_initializePool {
+        uint256 swapFeePercentage = 5e16; // 5%
+        vm.prank(hookOwner);
+        vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
     }
 
     function testSwapFeeTen() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 10e16; // 10%
+        uint256 swapFeePercentage = 10e16; // 10% (max)
         vm.prank(hookOwner);
         vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
        _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
     }
 
-    function testSwapFeeTwentyFive() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 25e16; // 25%
-        vm.prank(hookOwner);
-        vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
-        _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
-    }
 
     function testOwnerCanRemoveLiquidityAfterSettlement() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0;
+        uint256 swapFeePercentage = 0.01e18;
         console.log("BPT amount of hook: ", IERC20(pool).balanceOf(nftCheckHook));
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
 
@@ -159,7 +165,7 @@ contract TestNftCheckHookCSum is BaseVaultTest {
     }
 
     function testRugPulling() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+        uint256 swapFeePercentage = 0.01e18; // 0%
 
         // random user swaps usdc for linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
@@ -173,9 +179,9 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
     // amount of linked tokens in the pool = 2 * amount of usdc in the pool 
     function testRedeemRationWhenStablePoolRatioIsBig() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 0; // 0%
+        uint256 swapFeePercentage = 0.01e18; // 0%
 
-        // random user swaps 40e18 usdc for 40e18 linked token
+        // random user swaps 40e18 usdc for 39.6e18 linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
         // pool 10e18/90e18 linked/usdc
 
@@ -188,8 +194,8 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
         uint256 stableAmountRequired = NftCheckHook(nftCheckHook).getSettlementAmount();
 
-        // user has 40 linked tokens so stableAmountRequired = 40e18 * 2 = 80e18
-        uint256 expectedStableAmountRequired = 80e18;
+        // user has 39.6 linked tokens so stableAmountRequired = 39.6e18 * 2 = 79.2e18
+        uint256 expectedStableAmountRequired = 79.2e18;
         assertEq(stableAmountRequired, expectedStableAmountRequired, "Wrong stableAmountRequired");
     }
 
@@ -229,22 +235,100 @@ contract TestNftCheckHookCSum is BaseVaultTest {
     }
 
     function _createPool(address[] memory tokens, string memory label) internal virtual override returns (address) {
-        PoolMock newPool = new PoolMock(IVault(address(vault)), "ERC20 Pool", "ERC20POOL");
+        ConstantSumFactory factory = new ConstantSumFactory(vault, 365 days);
+        CustomPoolConfig memory poolConfig = getProductPoolConfig(address(linkedToken), address(usdc));
+
+        address newPool = factory.create(
+            poolConfig.name,
+            poolConfig.symbol,
+            poolConfig.salt,
+            poolConfig.tokenConfigs,
+            poolConfig.swapFeePercentage,
+            poolConfig.protocolFeeExempt,
+            poolConfig.roleAccounts,
+            nftCheckHook, // poolHooksContract
+            poolConfig.liquidityManagement
+        );
         vm.label(address(newPool), label);
 
-        PoolRoleAccounts memory roleAccounts;
-        LiquidityManagement memory liquidityManagement;
-        liquidityManagement.enableDonation = true;
-
-        factoryMock.registerPool(
-            address(newPool),
-            vault.buildTokenConfig(tokens.asIERC20()),
-            roleAccounts,
-            poolHooksContract,
-            liquidityManagement
-        );
-
         return address(newPool);
+    }
+  
+    struct CustomPoolConfig {
+        string name;
+        string symbol;
+        bytes32 salt;
+        TokenConfig[] tokenConfigs;
+        uint256 swapFeePercentage;
+        bool protocolFeeExempt;
+        PoolRoleAccounts roleAccounts;
+        address poolHooksContract;
+        LiquidityManagement liquidityManagement;
+    }
+
+    /**
+     * Sorts the tokenConfig array into alphanumeric order
+     */
+    function sortTokenConfig(TokenConfig[] memory tokenConfig) internal pure returns (TokenConfig[] memory) {
+        for (uint256 i = 0; i < tokenConfig.length - 1; i++) {
+            for (uint256 j = 0; j < tokenConfig.length - i - 1; j++) {
+                if (tokenConfig[j].token > tokenConfig[j + 1].token) {
+                    // Swap if they're out of order.
+                    (tokenConfig[j], tokenConfig[j + 1]) = (tokenConfig[j + 1], tokenConfig[j]);
+                }
+            }
+        }
+        return tokenConfig;
+    }
+
+    function getProductPoolConfig(
+        address token1,
+        address token2
+    ) internal view returns (CustomPoolConfig memory config) {
+        string memory name = "Constant Product Pool"; // name for the pool
+        string memory symbol = "CPP"; // symbol for the BPT
+        bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
+        uint256 swapFeePercentage = 0.01e18; // 1%
+        bool protocolFeeExempt = false;
+        address poolHooksContract = address(0); // zero address if no hooks contract is needed
+
+        TokenConfig[] memory tokenConfigs = new TokenConfig[](2); // An array of descriptors for the tokens the pool will manage
+        tokenConfigs[0] = TokenConfig({ // Make sure to have proper token order (alphanumeric)
+            token: IERC20(token1),
+            tokenType: TokenType.STANDARD, // STANDARD or WITH_RATE
+            rateProvider: IRateProvider(address(0)), // The rate provider for a token (see further documentation above)
+            paysYieldFees: false // Flag indicating whether yield fees should be charged on this token
+        });
+        tokenConfigs[1] = TokenConfig({ // Make sure to have proper token order (alphanumeric)
+            token: IERC20(token2),
+            tokenType: TokenType.STANDARD, // STANDARD or WITH_RATE
+            rateProvider: IRateProvider(address(0)), // The rate provider for a token (see further documentation above)
+            paysYieldFees: false // Flag indicating whether yield fees should be charged on this token
+        });
+
+        PoolRoleAccounts memory roleAccounts = PoolRoleAccounts({
+            pauseManager: address(0), // Account empowered to pause/unpause the pool (or 0 to delegate to governance)
+            swapFeeManager: address(0), // Account empowered to set static swap fees for a pool (or 0 to delegate to goverance)
+            poolCreator: address(0) // Account empowered to set the pool creator fee percentage
+        });
+        LiquidityManagement memory liquidityManagement = LiquidityManagement({
+            disableUnbalancedLiquidity: false,
+            enableAddLiquidityCustom: false,
+            enableRemoveLiquidityCustom: false,
+            enableDonation: true
+        });
+
+        config = CustomPoolConfig({
+            name: name,
+            symbol: symbol,
+            salt: salt,
+            tokenConfigs: sortTokenConfig(tokenConfigs),
+            swapFeePercentage: swapFeePercentage,
+            protocolFeeExempt: protocolFeeExempt,
+            roleAccounts: roleAccounts,
+            poolHooksContract: poolHooksContract,
+            liquidityManagement: liquidityManagement
+        });
     }
 
     function initPool() internal override {
@@ -277,6 +361,7 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
         return router.initialize(poolToInit, tokens, amountsIn, minBptOut, false, bytes(""));
     }
+
 
     // user and owner actions
 
