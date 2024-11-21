@@ -64,8 +64,6 @@ contract TestNftCheckHookCSum is BaseVaultTest {
     uint256 constant USDC_SWAP_AMOUNT_IN = 10e18;
     uint256 constant SETTLEMENT_FEE = 10e16;
 
-    HelperForTests internal helperForTests;
-
     modifier transferNFT_approveBPT_initializePool() {
         // Transfer NFT, approve bpt transfer to hook and initialize pool
         vm.startPrank(hookOwner);
