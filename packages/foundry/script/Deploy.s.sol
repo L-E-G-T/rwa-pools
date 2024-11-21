@@ -42,9 +42,9 @@ contract DeployScript is
         // Deploy, register, and initialize a constant sum pool with a CheckNftHook
         // deployConstantSumPoolWithCheckHook(mockStable);
         // Deploy, register, and initialize a constant product pool with a CheckNftHook
-        // deployConstantProductPoolWithCheckHook(mockStable);
+        deployConstantProductPoolWithCheckHook(mockStable);
         // Deploy, register, and initialize a weighted pool with an exit CheckNftHook
-        deployWeightedPool8020WithCheckHook(mockStable);
+        // deployWeightedPool8020WithCheckHook(mockStable);
     }
 
     modifier scaffoldExport() {

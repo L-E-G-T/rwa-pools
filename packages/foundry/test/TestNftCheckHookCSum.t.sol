@@ -33,7 +33,7 @@ import { InitializationConfig } from "../script/PoolHelpers.sol";
 import { InputHelpers } from "@balancer-labs/v3-solidity-utils/contracts/helpers/InputHelpers.sol";
 import { IRateProvider } from "@balancer-labs/v3-interfaces/contracts/solidity-utils/helpers/IRateProvider.sol";
 import { ConstantSumFactory } from "../contracts/factories/ConstantSumFactory.sol";
-
+import { ConstantSumPool } from "../contracts/pools/ConstantSumPool.sol";
 
 contract TestNftCheckHookCSum is BaseVaultTest {
     using CastingHelpers for address[];
@@ -61,19 +61,20 @@ contract TestNftCheckHookCSum is BaseVaultTest {
     uint256 constant RANDOM_USER_USDC_INITIAL_BALANCE = 100*1e18;
     uint256 constant POOL_INITIAL_AMOUNT = 50e18;
     // random user swap amount in
-    uint256 constant USDC_SWAP_AMOUNT_IN = 40e18;
+    uint256 constant USDC_SWAP_AMOUNT_IN = 10e18;
     uint256 constant SETTLEMENT_FEE = 10e16;
 
+    HelperForTests internal helperForTests;
 
     modifier transferNFT_approveBPT_initializePool() {
         // Transfer NFT, approve bpt transfer to hook and initialize pool
         vm.startPrank(hookOwner);
         mockNft.transferFrom(hookOwner, nftCheckHook, 0);
-        PoolMock(pool).approve(nftCheckHook, type(uint256).max);
+        ConstantSumPool(pool).approve(nftCheckHook, type(uint256).max);
         initPool();
         vm.stopPrank();
         // Owner has no BPT
-        assertEq(PoolMock(pool).balanceOf(hookOwner), 0, "hookOwner has BPT");
+        assertEq(ConstantSumPool(pool).balanceOf(hookOwner), 0, "hookOwner has BPT");
         _;
     }
 
@@ -104,6 +105,8 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
         // Grants hookOwner the ability to change the static swap fee percentage.
         authorizer.grantRole(vault.getActionId(IVaultAdmin.setStaticSwapFeePercentage.selector), hookOwner);
+
+        helperForTests = new HelperForTests();
     }
 
     ////////////////////////////////////////
@@ -122,7 +125,7 @@ contract TestNftCheckHookCSum is BaseVaultTest {
         uint256 hookOwnerUsdcBalance = usdc.balanceOf(hookOwner);
         assertEq(hookOwnerUsdcBalance, OWNER_USDC_INITIAL_BALANCE, "hookOwner wrong usdc tokens balance");
         // Owner has no BPT
-        assertEq(PoolMock(pool).balanceOf(hookOwner), 0);
+        assertEq(ConstantSumPool(pool).balanceOf(hookOwner), 0);
 
         /// RandomUser
         uint256 randomUserLinkedBalance = linkedToken.balanceOf(randomUser);
@@ -181,12 +184,12 @@ contract TestNftCheckHookCSum is BaseVaultTest {
     function testRedeemRationWhenStablePoolRatioIsBig() public transferNFT_approveBPT_initializePool {
         uint256 swapFeePercentage = 0.01e18; // 0%
 
-        // random user swaps 40e18 usdc for 39.6e18 linked token
+        // random user swaps 10e18 usdc for 9.9e18 linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
-        // pool 10e18/90e18 linked/usdc
+        // pool 40e18/60e18 linked/usdc
 
-        // Owner adds 170e18 linked tokens
-        uint256 linkedAmountIn = 170e18;
+        // Owner adds 80e18 linked tokens
+        uint256 linkedAmountIn = 80e18;
         uint256[] memory amountsToAdd = linkedTokenIdx == 0 ? 
             [linkedAmountIn, uint256(0)].toMemoryArray() : [uint256(0), linkedAmountIn].toMemoryArray();
         _ownerAddsLiquidity(amountsToAdd);
@@ -194,8 +197,8 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
         uint256 stableAmountRequired = NftCheckHook(nftCheckHook).getSettlementAmount();
 
-        // user has 39.6 linked tokens so stableAmountRequired = 39.6e18 * 2 = 79.2e18
-        uint256 expectedStableAmountRequired = 79.2e18;
+        // user has 9.9 linked tokens so stableAmountRequired = 9.9e18 * 2 = 19.8e18
+        uint256 expectedStableAmountRequired = 19.8e18;
         assertEq(stableAmountRequired, expectedStableAmountRequired, "Wrong stableAmountRequired");
     }
 

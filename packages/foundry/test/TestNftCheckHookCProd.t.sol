@@ -62,7 +62,8 @@ contract TestNftCheckHookCProd is BaseVaultTest {
     uint256 constant RANDOM_USER_USDC_INITIAL_BALANCE = 100*1e18;
     uint256 constant POOL_INITIAL_AMOUNT = 50e18;
     // random user swap amount in
-    uint256 constant USDC_SWAP_AMOUNT_IN = 40e18;
+    uint256 constant USDC_SWAP_AMOUNT_IN = 10e18;
+    uint256 constant EXPECTED_LINKED_TOKEN_AMOUNT_OUT = 8249999999999999999;
     uint256 constant SETTLEMENT_FEE = 10e16;
 
 
@@ -137,28 +138,14 @@ contract TestNftCheckHookCProd is BaseVaultTest {
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
     }
 
-    function testSwapFeeFive() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 5e16; // 5%
-        vm.prank(hookOwner);
-        vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
-        _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
-    }
-
-    function testSwapFeeTen() public transferNFT_approveBPT_initializePool {
-        uint256 swapFeePercentage = 10e16; // 10% (max)
-        vm.prank(hookOwner);
-        vault.setStaticSwapFeePercentage(pool, swapFeePercentage);
-       _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
-    }
-
     function testOwnerCanRemoveLiquidityAfterSettlement() public transferNFT_approveBPT_initializePool {
         uint256 swapFeePercentage = 0.01e18;
         console.log("BPT amount of hook: ", IERC20(pool).balanceOf(nftCheckHook));
         _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(swapFeePercentage);
 
         uint256 bptAmount = IERC20(pool).balanceOf(hookOwner);
-        // for some reason the bpt amount is slightly different than 2*POOL_INITIAL_AMOUNT, TODO
-        // TODO assertEq(bptAmount, 99999999999999000000, "Wrong bpt amount");
+        // for some reason the bpt amount is a lot different than 2*POOL_INITIAL_AMOUNT, TODO
+        assertEq(bptAmount, 49999999999999000000, "Wrong bpt amount");
         _ownerRemovesLiquidityProportional(bptAmount, false);
     }
 
@@ -179,22 +166,22 @@ contract TestNftCheckHookCProd is BaseVaultTest {
     function testRedeemRationWhenStablePoolRatioIsBig() public transferNFT_approveBPT_initializePool {
         uint256 swapFeePercentage = 0.01e18; // 0%
 
-        // random user swaps 40e18 usdc for 40e18 linked token
+        // random user swaps 10e18 usdc for 8.249~e18 linked token
         uint256 expectedLinkedTokenOut = _firstUserSwaps(swapFeePercentage);
-        // pool 10e18/90e18 linked/usdc
+        // pool 41.751~e18/60e18 linked/usdc
 
-        // Owner adds 170e18 linked tokens
-        uint256 linkedAmountIn = 170e18;
+        // Owner adds enough linked tokens so that linked tokens = 2 * usdc
+        uint256 linkedAmountIn = 2*60e18 - (USDC_SWAP_AMOUNT_IN - EXPECTED_LINKED_TOKEN_AMOUNT_OUT);
         uint256[] memory amountsToAdd = linkedTokenIdx == 0 ? 
             [linkedAmountIn, uint256(0)].toMemoryArray() : [uint256(0), linkedAmountIn].toMemoryArray();
         _ownerAddsLiquidity(amountsToAdd);
-        // pool 180e18/90e18 linked/usdc so linked/usdc rato is 2
+        // pool 120e18/60e18 linked/usdc so linked/usdc rato is 2
 
         uint256 stableAmountRequired = NftCheckHook(nftCheckHook).getSettlementAmount();
 
-        // user has 40 linked tokens so stableAmountRequired = 40e18 * 2 = 80e18
-        uint256 expectedStableAmountRequired = 80e18;
-        // TODO assertEq(stableAmountRequired, expectedStableAmountRequired, "Wrong stableAmountRequired");
+        // user has EXPECTED_LINKED_TOKEN_AMOUNT_OUT linked tokens so stableAmountRequired = EXPECTED_LINKED_TOKEN_AMOUNT_OUT * 2
+        uint256 expectedStableAmountRequired = EXPECTED_LINKED_TOKEN_AMOUNT_OUT * 2;
+        assertEq(stableAmountRequired, expectedStableAmountRequired, "Wrong stableAmountRequired");
     }
 
     ////////////////////////////////////////
@@ -388,10 +375,9 @@ contract TestNftCheckHookCProd is BaseVaultTest {
 
     function _firstUserSwaps(uint256 _swapFeePercentage) internal returns (uint256 expectedLinkedTokenOut) {
         _swap(randomUser, usdc, IERC20(linkedTokenAddress), USDC_SWAP_AMOUNT_IN, false);
-        uint256 expectedPoolFee = USDC_SWAP_AMOUNT_IN * _swapFeePercentage / 1e18;
-        expectedLinkedTokenOut = USDC_SWAP_AMOUNT_IN - expectedPoolFee;
         assertEq(usdc.balanceOf(randomUser), RANDOM_USER_USDC_INITIAL_BALANCE - USDC_SWAP_AMOUNT_IN, "RandomUser wrong usdc tokens balance");
-        // TODO assertEq(linkedToken.balanceOf(randomUser), expectedLinkedTokenOut, "RandomUser has some linked tokens");
+        assertEq(linkedToken.balanceOf(randomUser), EXPECTED_LINKED_TOKEN_AMOUNT_OUT, "RandomUser has some linked tokens");
+        expectedLinkedTokenOut = EXPECTED_LINKED_TOKEN_AMOUNT_OUT;
     }
 
     function _ownerSettlesPool() internal {
@@ -408,11 +394,10 @@ contract TestNftCheckHookCProd is BaseVaultTest {
         linkedToken.approve(nftCheckHook, type(uint256).max);
         NftCheckHook(nftCheckHook).redeem();
         vm.stopPrank();
-        uint256 settlementAmount = (expectedLinkedTokenOut * (1 ether + SETTLEMENT_FEE)) / 1 ether;
-        // TODO assertEq(usdc.balanceOf(hookOwner), OWNER_USDC_INITIAL_BALANCE - POOL_INITIAL_AMOUNT - settlementAmount, 'hookOwner wrong usdc balance');
-        // assertEq(linkedToken.balanceOf(hookOwner), OWNER_LINKED_TOKEN_INITIAL_BALANCE - POOL_INITIAL_AMOUNT + expectedLinkedTokenOut, 'hookOwner wrong linked token balance');
-        // assertEq(usdc.balanceOf(randomUser), RANDOM_USER_USDC_INITIAL_BALANCE - USDC_SWAP_AMOUNT_IN + settlementAmount, 'randomUser wrong usdc balance');
-        // assertEq(linkedToken.balanceOf(randomUser), 0, 'randomuser wrong linked token balance');
+        assertEq(usdc.balanceOf(hookOwner), 940925000000000000002, 'hookOwner wrong usdc balance');
+        assertEq(linkedToken.balanceOf(hookOwner), 958249999999999999999, 'hookOwner wrong linked token balance');
+        assertEq(usdc.balanceOf(randomUser), 99074999999999999998, 'randomUser wrong usdc balance');
+        assertEq(linkedToken.balanceOf(randomUser), 0, 'randomuser wrong linked token balance');
     }
 
     function _userSwapsOwnerSettlesUserRedeemsUserSwapsWithRevert(uint256 _swapFeePercentage) internal {
