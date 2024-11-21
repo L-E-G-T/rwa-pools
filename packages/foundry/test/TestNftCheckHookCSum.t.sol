@@ -103,8 +103,6 @@ contract TestNftCheckHookCSum is BaseVaultTest {
 
         // Grants hookOwner the ability to change the static swap fee percentage.
         authorizer.grantRole(vault.getActionId(IVaultAdmin.setStaticSwapFeePercentage.selector), hookOwner);
-
-        helperForTests = new HelperForTests();
     }
 
     ////////////////////////////////////////
