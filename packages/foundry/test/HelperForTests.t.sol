@@ -49,7 +49,7 @@ contract HelperForTests is BaseVaultTest{
     uint256 constant OWNER_USDC_INITIAL_BALANCE = 1e3*1e18;
     uint256 constant RANDOM_USER_USDC_INITIAL_BALANCE = 100*1e18;
     uint256 constant POOL_INITIAL_AMOUNT = 50e18;
-    uint256 constant SWAP_FEE_PERCENTAGE = 0.001e18;
+    uint256 constant SWAP_FEE_PERCENTAGE = 0.01e18;  // 1%
     // random user swap amount in
     uint256 constant USDC_SWAP_AMOUNT_IN = 10e18;
     uint256 constant EXPECTED_LINKED_TOKEN_AMOUNT_OUT = 8249999999999999999; // for CP
@@ -317,7 +317,7 @@ contract HelperForTests is BaseVaultTest{
         string memory name = "Constant Product Pool"; // name for the pool
         string memory symbol = "CPP"; // symbol for the BPT
         bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
-        uint256 swapFeePercentage = 0.01e18; // 1%
+        uint256 swapFeePercentage = SWAP_FEE_PERCENTAGE; // 1%
         bool protocolFeeExempt = false;
         address poolHooksContract = address(0); // zero address if no hooks contract is needed
 
