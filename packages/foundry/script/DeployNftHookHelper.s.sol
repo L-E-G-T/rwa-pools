@@ -14,27 +14,30 @@ import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { PoolHelpers, CustomPoolConfig, InitializationConfig } from "./PoolHelpers.sol";
 import { ScaffoldHelpers, console } from "./ScaffoldHelpers.sol";
 import { ConstantSumFactory } from "../contracts/factories/ConstantSumFactory.sol";
+import { ConstantProductFactory } from "../contracts/factories/ConstantProductFactory.sol";
+import { WeightedPoolFactory } from "@balancer-labs/v3-pool-weighted/contracts/WeightedPoolFactory.sol";
 import { NftCheckHook } from "../contracts/hooks/NftCheckHook.sol";
 import { MockNft } from "../contracts/mocks/MockNft.sol";
 import { Router } from "../contracts/mocks/Router.sol";
 import { MockLinked } from "../contracts/mocks/MockLinked.sol";
 import { MockStable } from "../contracts/mocks/MockStable.sol";
 
+enum FactoryType {
+    ConstantSum,
+    ConstantProduct,
+    Weighted
+}
 
-/**
- * @title Deploy Constant Sum Pool
- * @notice Deploys, registers, and initializes a constant sum pool that uses a swap fee discount hook
- */
-contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
-    function deployConstantSumPoolWithCheckHook(address token) internal {
+contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
+    bool private constant ENABLE_DONATION = true;
+    bool private constant DISABLE_UNBALANCED_LIQUIDITY = false;
+    uint256 private constant SWAP_FEE_PERCENTAGE = 0.01e18;
+
+    function deployNftHookHelper(address token, FactoryType factoryType) public {
         // Start creating the transactions
-        address deployerAddress = address(uint160(getDeployerAddress()));
+        // address deployerAddress = address(uint160(getDeployerAddress())); TODO
         uint256 deployerPrivateKey = getDeployerPrivateKey();
         vm.startBroadcast(deployerPrivateKey);
-
-        // Deploy a factory
-        ConstantSumFactory factory = new ConstantSumFactory(vault, 365 days); // pauseWindowDuration
-        console.log("Constant Sum Factory deployed at: %s", address(factory));
 
         // Deploy a Sample Token - will throw warning on deploy as it is not used in the following code
         // however it is needed in order to interact with the contract via scaffold's patterns
@@ -55,22 +58,68 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
         // Set the pool's deployment, registration, and initialization config
         address linkedTokenAddress = NftCheckHook(nftCheckHook).getLinkedToken();
         console.log("linkedTokenAddress: %s", linkedTokenAddress);
-        CustomPoolConfig memory poolConfig = getCheckSumPoolConfig(linkedTokenAddress, token);
+        // TODO make sure the tokens are sorted correctly and match with pool weights
+        CustomPoolConfig memory poolConfig = getPoolConfig(linkedTokenAddress, token, factoryType);
         InitializationConfig memory initConfig = getCheckSumPoolInitConfig(linkedTokenAddress, token);
 
-        // Deploy a pool and register it with the vault
-        address pool = factory.create(
-            poolConfig.name,
-            poolConfig.symbol,
-            poolConfig.salt,
-            poolConfig.tokenConfigs,
-            poolConfig.swapFeePercentage,
-            poolConfig.protocolFeeExempt,
-            poolConfig.roleAccounts,
-            nftCheckHook, // poolHooksContract --> calls onRegister
-            poolConfig.liquidityManagement
-        );
-        console.log("SumPoolWithNftCheckHook deployed at: %s", pool);
+        address pool;
+        if (factoryType == FactoryType.ConstantSum) {
+            // Deploy a factory
+            ConstantSumFactory factory = new ConstantSumFactory(vault, 365 days); // pauseWindowDuration
+            console.log("Constant Sum Factory deployed at: %s", address(factory));
+
+            // Deploy a pool and register it with the vault
+            pool = factory.create(
+                poolConfig.name,
+                poolConfig.symbol,
+                poolConfig.salt,
+                poolConfig.tokenConfigs,
+                poolConfig.swapFeePercentage,
+                poolConfig.protocolFeeExempt,
+                poolConfig.roleAccounts,
+                nftCheckHook, // poolHooksContract --> calls onRegister
+                poolConfig.liquidityManagement
+            );
+            console.log("SumPoolWithNftCheckHook deployed at: %s", pool);
+        } else if (factoryType == FactoryType.ConstantProduct) {
+            // Deploy a factory
+            ConstantProductFactory factory = new ConstantProductFactory(vault, 365 days); //pauseWindowDuration
+            console.log("Constant Product Factory deployed at: %s", address(factory));
+
+            // Deploy a pool and register it with the vault
+            pool = factory.create(
+                poolConfig.name,
+                poolConfig.symbol,
+                poolConfig.salt,
+                poolConfig.tokenConfigs,
+                poolConfig.swapFeePercentage,
+                poolConfig.protocolFeeExempt,
+                poolConfig.roleAccounts,
+                nftCheckHook,
+                poolConfig.liquidityManagement
+            );
+            console.log("ConstantProductPoolWithNftCheckHook deployed at: %s", pool);
+        } else if (factoryType == FactoryType.Weighted) {
+            // Deploy a  factory
+            WeightedPoolFactory factory = new WeightedPoolFactory(vault, 365 days, "Factory v1", "Pool v1");
+            console.log("Weighted Pool Factory deployed at: %s", address(factory));
+
+            // Deploy a pool and register it with the vault
+            /// @notice passing args directly to avoid stack too deep error
+             pool = factory.create(
+                "80/20 Weighted Pool", // string name
+                "80-20-WP", // string symbol
+                poolConfig.tokenConfigs, // getTokenConfigs(token1, token2), // TokenConfig[] tokenConfigs
+                getNormailzedWeights(), // uint256[] normalizedWeights
+                poolConfig.roleAccounts, // PoolRoleAccounts roleAccounts
+                SWAP_FEE_PERCENTAGE, // uint256 swapFeePercentage (1%)
+                nftCheckHook, // address poolHooksContract
+                ENABLE_DONATION,
+                DISABLE_UNBALANCED_LIQUIDITY,
+                keccak256(abi.encode(block.number)) // bytes32 salt
+            );
+            console.log("Weighted Pool deployed at: %s", pool);
+        }
 
         // Approve the router to spend tokens for pool initialization
         approveRouterWithPermit2(initConfig.tokens);
@@ -94,11 +143,12 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
      * For STANDARD tokens, the rate provider address must be 0, and paysYieldFees must be false.
      * All WITH_RATE tokens need a rate provider, and may or may not be yield-bearing.
      */
-    function getCheckSumPoolConfig(address token1, address token2) internal view returns (CustomPoolConfig memory config) {
-        string memory name = "NFT Constant Sum Pool"; // name for the pool
-        string memory symbol = "NFTCSP"; // symbol for the BPT
+    function getPoolConfig(address token1, address token2, FactoryType factoryType ) internal view returns (CustomPoolConfig memory config) {
+        // string memory name = "NFT " + factoryType + " Pool"; // name for the pool
+        string memory name = factoryType == FactoryType.ConstantSum ? "NFT Costant Sum Pool" : factoryType == FactoryType.Weighted ? "NFT Weighted Pool" : "NFT Constant Product Pool"; // symbol for the BPT
+        string memory symbol = factoryType == FactoryType.ConstantSum ? "NFTCSP" : factoryType == FactoryType.Weighted ? "NFTWTP" : "NFTCPP"; // symbol for the BPT
         bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
-        uint256 swapFeePercentage = 0.01e18; // 1%
+        uint256 swapFeePercentage = SWAP_FEE_PERCENTAGE; // 1%
         bool protocolFeeExempt = true;
         address poolHooksContract = address(0); // zero address if no hooks contract is needed
 
@@ -122,10 +172,10 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
             poolCreator: address(0) // Account empowered to set the pool creator fee percentage
         });
         LiquidityManagement memory liquidityManagement = LiquidityManagement({
-            disableUnbalancedLiquidity: false,
+            disableUnbalancedLiquidity: DISABLE_UNBALANCED_LIQUIDITY,
             enableAddLiquidityCustom: false,
             enableRemoveLiquidityCustom: false,
-            enableDonation: true
+            enableDonation: ENABLE_DONATION
         });
 
         config = CustomPoolConfig({
@@ -167,4 +217,12 @@ contract DeployConstantSumPoolWithCheckHook is PoolHelpers, ScaffoldHelpers {
             userData: userData
         });
     }
+
+    /// @dev Set the weights for each token in the pool
+    function getNormailzedWeights() internal pure returns (uint256[] memory normalizedWeights) {
+        normalizedWeights = new uint256[](2);
+        normalizedWeights[0] = uint256(80e16);
+        normalizedWeights[1] = uint256(20e16);
+    }
 }
+
