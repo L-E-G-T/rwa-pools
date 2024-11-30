@@ -59,7 +59,7 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
         address linkedTokenAddress = NftCheckHook(nftCheckHook).getLinkedToken();
         console.log("linkedTokenAddress: %s", linkedTokenAddress);
         // TODO make sure the tokens are sorted correctly and match with pool weights
-        CustomPoolConfig memory poolConfig = getCheckSumPoolConfig(linkedTokenAddress, token);
+        CustomPoolConfig memory poolConfig = getPoolConfig(linkedTokenAddress, token, factoryType);
         InitializationConfig memory initConfig = getCheckSumPoolInitConfig(linkedTokenAddress, token);
 
         address pool;
@@ -143,9 +143,10 @@ contract DeployNftHookHelper is PoolHelpers, ScaffoldHelpers {
      * For STANDARD tokens, the rate provider address must be 0, and paysYieldFees must be false.
      * All WITH_RATE tokens need a rate provider, and may or may not be yield-bearing.
      */
-    function getCheckSumPoolConfig(address token1, address token2) internal view returns (CustomPoolConfig memory config) {
-        string memory name = "NFT Constant Sum Pool"; // name for the pool
-        string memory symbol = "NFTCSP"; // symbol for the BPT
+    function getPoolConfig(address token1, address token2, FactoryType factoryType ) internal view returns (CustomPoolConfig memory config) {
+        // string memory name = "NFT " + factoryType + " Pool"; // name for the pool
+        string memory name = factoryType == FactoryType.ConstantSum ? "NFT Costant Sum Pool" : factoryType == FactoryType.Weighted ? "NFT Weighted Pool" : "NFT Constant Product Pool"; // symbol for the BPT
+        string memory symbol = factoryType == FactoryType.ConstantSum ? "NFTCSP" : factoryType == FactoryType.Weighted ? "NFTWTP" : "NFTCPP"; // symbol for the BPT
         bytes32 salt = keccak256(abi.encode(block.number)); // salt for the pool deployment via factory
         uint256 swapFeePercentage = SWAP_FEE_PERCENTAGE; // 1%
         bool protocolFeeExempt = true;
